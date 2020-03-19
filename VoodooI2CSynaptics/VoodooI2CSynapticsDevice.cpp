@@ -209,6 +209,12 @@ bool VoodooI2CSynapticsDevice::start(IOService* api) {
     if (!super::start(api))
         return false;
     
+    // Read QuietTimeAfterTyping configuration value (if available)
+   OSNumber* quietTimeAfterTyping = OSDynamicCast(OSNumber, getProperty("QuietTimeAfterTyping"));
+   if (quietTimeAfterTyping != NULL)
+       maxaftertyping = quietTimeAfterTyping->unsigned64BitValue() * 1000000; // Convert to nanoseconds
+
+    
     reading = true;
     
     work_loop = getWorkLoop();
@@ -253,9 +259,9 @@ bool VoodooI2CSynapticsDevice::start(IOService* api) {
     setProperty("VoodooI2CServices Supported", OSBoolean::withBoolean(true));
     
     publish_multitouch_interface();
+    registerService();
     
     reading = false;
-    
     
     return true;
 exit:
@@ -1007,6 +1013,15 @@ void VoodooI2CSynapticsDevice::interruptOccured(OSObject* owner, IOInterruptEven
 }
 
 void VoodooI2CSynapticsDevice::get_input() {
+     // Ignore input for specified time after keyboard usage
+    AbsoluteTime timestamp;
+    clock_get_uptime(&timestamp);
+    uint64_t timestamp_ns;
+    absolutetime_to_nanoseconds(timestamp, &timestamp_ns);
+
+    if (timestamp_ns - keytime < maxaftertyping)
+        return ;
+    
     reading = true;
     
     uint8_t reg = 0;
@@ -1081,6 +1096,44 @@ void VoodooI2CSynapticsDevice::unpublish_multitouch_interface() {
 
 /* Sasha - impl polling */
 void VoodooI2CSynapticsDevice::simulateInterrupt(OSObject* owner, IOTimerEventSource *timer) {
-    interruptOccured(owner, NULL, NULL);
+    interruptOccured(owner, 0, 0);
     interrupt_simulator->setTimeoutMS(INTERRUPT_SIMULATOR_TIMEOUT);
+}
+
+IOReturn VoodooI2CSynapticsDevice::message(UInt32 type, IOService* provider, void* argument) {
+    switch (type) {
+        case kKeyboardGetTouchStatus:
+        {
+#if DEBUG
+            IOLog("%s::getEnabledStatus = %s\n", getName(), ignoreall ? "false" : "true");
+#endif
+            bool* pResult = (bool*)argument;
+            *pResult = !ignoreall;
+            break;
+        }
+        case kKeyboardSetTouchStatus:
+        {
+            bool enable = *((bool*)argument);
+#if DEBUG
+            IOLog("%s::setEnabledStatus = %s\n", getName(), enable ? "true" : "false");
+#endif
+            // ignoreall is true when trackpad has been disabled
+            if (enable == ignoreall) {
+                // save state, and update LED
+                ignoreall = !enable;
+            }
+            break;
+        }
+        case kKeyboardKeyPressTime:
+        {
+            //  Remember last time key was pressed
+            keytime = *((uint64_t*)argument);
+#if DEBUG
+            IOLog("%s::keyPressed = %llu\n", getName(), keytime);
+#endif
+            break;
+        }
+    }
+
+    return kIOReturnSuccess;
 }
