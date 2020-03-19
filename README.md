@@ -2,4 +2,4 @@
 
 Support polling mode.
 
-Support Quite after typing.
+Support Quiet after typing.
