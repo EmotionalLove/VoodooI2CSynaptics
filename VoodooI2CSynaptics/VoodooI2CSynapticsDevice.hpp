@@ -58,7 +58,7 @@ struct rmi_function {
 };
 
 
-typedef struct __attribute__((__packed__)) pdt_entry {
+struct __attribute__((__packed__)) pdt_entry {
     uint8_t query_base_addr : 8;
     uint8_t command_base_addr : 8;
     uint8_t control_base_addr : 8;
@@ -140,11 +140,11 @@ protected:
 public:
     void stop(IOService* device) override;
     
-    bool start(IOService* api);
+    bool start(IOService* api) override;
     
-    bool init(OSDictionary* properties);
+    bool init(OSDictionary* properties) override;
     
-    VoodooI2CSynapticsDevice* probe(IOService* provider, SInt32* score);
+    VoodooI2CSynapticsDevice* probe(IOService* provider, SInt32* score) override;
     
     void interruptOccured(OSObject* owner, IOInterruptEventSource* src, int intCount);
     
