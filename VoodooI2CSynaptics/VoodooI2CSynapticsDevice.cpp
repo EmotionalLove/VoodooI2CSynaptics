@@ -1087,12 +1087,14 @@ void VoodooI2CSynapticsDevice::simulateInterrupt(OSObject* owner, IOTimerEventSo
 }
 
 IOReturn VoodooI2CSynapticsDevice::message(UInt32 type, IOService* provider, void* argument) {
+#if DEBUG
+    IOLog("%s::Press key = %d\n", getName(),type);
+#endif
+    
     switch (type) {
         case kKeyboardGetTouchStatus:
         {
-#if DEBUG
             IOLog("%s::getEnabledStatus = %s\n", getName(), ignoreall ? "false" : "true");
-#endif
             bool* pResult = (bool*)argument;
             *pResult = !ignoreall;
             break;
@@ -1100,13 +1102,16 @@ IOReturn VoodooI2CSynapticsDevice::message(UInt32 type, IOService* provider, voi
         case kKeyboardSetTouchStatus:
         {
             bool enable = *((bool*)argument);
-#if DEBUG
             IOLog("%s::setEnabledStatus = %s\n", getName(), enable ? "true" : "false");
-#endif
             // ignoreall is true when trackpad has been disabled
             if (enable == ignoreall) {
                 // save state, and update LED
                 ignoreall = !enable;
+            }
+            if(ignoreall){
+                setPowerState(0,this);
+            } else{
+                setPowerState(1, this);
             }
             break;
         }
@@ -1115,7 +1120,7 @@ IOReturn VoodooI2CSynapticsDevice::message(UInt32 type, IOService* provider, voi
             //  Remember last time key was pressed
             keytime = *((uint64_t*)argument);
 #if DEBUG
-            IOLog("%s::keyPressed = %llu\n", getName(), keytime);
+            IOLog("%s::keyPressed at  %llu\n", getName(), keytime);
 #endif
             break;
         }
