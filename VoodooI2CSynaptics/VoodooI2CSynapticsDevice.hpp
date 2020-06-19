@@ -35,6 +35,14 @@ enum rmi_mode_type {
     RMI_MODE_NO_PACKED_ATTN_REPORTS = 2,
 };
 
+// Message types defined by ApplePS2Keyboard
+enum {
+    // from keyboard to mouse/touchpad
+    kKeyboardSetTouchStatus = iokit_vendor_specific_msg(100),   // set disable/enable touchpad (data is bool*)
+    kKeyboardGetTouchStatus = iokit_vendor_specific_msg(101),   // get disable/enable touchpad (data is bool*)
+    kKeyboardKeyPressTime = iokit_vendor_specific_msg(110)      // notify of timestamp a non-modifier key was pressed (data is uint64_t*)
+};
+
 struct rmi_function {
     unsigned page;            /* page of the function */
     uint16_t query_base_addr;        /* base address for queries */
@@ -50,7 +58,7 @@ struct rmi_function {
 };
 
 
-typedef struct __attribute__((__packed__)) pdt_entry {
+struct __attribute__((__packed__)) pdt_entry {
     uint8_t query_base_addr : 8;
     uint8_t command_base_addr : 8;
     uint8_t control_base_addr : 8;
@@ -103,12 +111,26 @@ private:
     unsigned long device_flags;
     unsigned long firmware_id;
     
+    uint64_t maxaftertyping = 500000000;
+    uint64_t keytime = 0;
+    bool ignoreall;
+    
     uint8_t f01_ctrl0;
     uint8_t interrupt_enable_mask;
     bool restore_interrupt_mask;
     
     VoodooI2CMultitouchInterface* mt_interface;
     
+    /*
+       * Called by ApplePS2Controller to notify of keyboard interactions
+       * @type Custom message type in iokit_vendor_specific_msg range
+       * @provider Calling IOService
+       * @argument Optional argument as defined by message type
+       *
+       * @return kIOSuccess if the message is processed
+       */
+      IOReturn message(UInt32 type, IOService* provider, void* argument) override;
+
 protected:
     bool awake;
     const char* name;
@@ -118,11 +140,11 @@ protected:
 public:
     void stop(IOService* device) override;
     
-    bool start(IOService* api);
+    bool start(IOService* api) override;
     
-    bool init(OSDictionary* properties);
+    bool init(OSDictionary* properties) override;
     
-    VoodooI2CSynapticsDevice* probe(IOService* provider, SInt32* score);
+    VoodooI2CSynapticsDevice* probe(IOService* provider, SInt32* score) override;
     
     void interruptOccured(OSObject* owner, IOInterruptEventSource* src, int intCount);
     
@@ -160,6 +182,5 @@ public:
     
     void simulateInterrupt(OSObject* owner, IOTimerEventSource* timer); /* Sasha - Implement polling mode */
 };
-
 
 #endif /* VoodooI2CSynapticsDevice_hpp */
